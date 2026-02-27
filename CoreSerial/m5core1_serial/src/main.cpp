@@ -27,9 +27,29 @@ static Stats g_stats;
 // Serial line buffer
 static String g_lineBuffer;
 
-// For a little cyberdeck flair: animate CPU and RAM bar "scan lines"
+// Dashboard redraw timing
 static uint32_t g_lastRedrawMs = 0;
-static uint8_t g_animPhase = 0;
+static uint8_t g_animPhase      = 0;
+
+// Display modes
+enum DisplayMode {
+    MODE_DASHBOARD = 0,
+    MODE_MATRIX    = 1,
+};
+
+static DisplayMode g_mode = MODE_DASHBOARD;
+
+// ============================================================================
+// Matrix rain mode state (BtnC)
+// ============================================================================
+
+static const int MATRIX_TEXT_HEIGHT = 8;
+static const int MATRIX_COLS        = 40;  // ~320 / 8
+static const int MATRIX_SCREEN_H    = 240;
+static const int MATRIX_TRAIL_ROWS  = 8;   // how many rows long each trail is
+
+static int  g_matrixDropY[MATRIX_COLS];
+static bool g_matrixInitialized = false;
 
 // Utility: split "key=value" into key + value
 static bool splitKeyValue(const String &kv, String &key, String &value) {
@@ -248,6 +268,67 @@ static void processSerialInput() {
     }
 }
 
+// ============================================================================
+// Matrix rain rendering
+// ============================================================================
+
+static void initMatrixMode() {
+    M5.Lcd.setRotation(1);
+    M5.Lcd.setTextFont(1);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.fillScreen(TFT_BLACK);
+
+    // Initialize random drop positions above the visible area
+    int rows = MATRIX_SCREEN_H / MATRIX_TEXT_HEIGHT;
+    for (int i = 0; i < MATRIX_COLS; ++i) {
+        g_matrixDropY[i] = - (random(rows));  // start at random negative row
+    }
+    g_matrixInitialized = true;
+}
+
+static void matrixStep() {
+    if (!g_matrixInitialized) {
+        initMatrixMode();
+    }
+
+    int rows = MATRIX_SCREEN_H / MATRIX_TEXT_HEIGHT;
+
+    // For each column, advance a single "raindrop"
+    for (int col = 0; col < MATRIX_COLS; ++col) {
+        int headRow = g_matrixDropY[col];
+        int headY   = headRow * MATRIX_TEXT_HEIGHT;
+        int x       = col * 8;  // 8px spacing across 320px
+
+        // Erase the tail segment that has moved beyond our desired trail length
+        int tailRow = headRow - MATRIX_TRAIL_ROWS;
+        if (tailRow >= 0 && tailRow * MATRIX_TEXT_HEIGHT < MATRIX_SCREEN_H) {
+            int tailY = tailRow * MATRIX_TEXT_HEIGHT;
+            // Clear the entire character cell so old trail pixels fully disappear
+            M5.Lcd.fillRect(x, tailY, 8, MATRIX_TEXT_HEIGHT, TFT_BLACK);
+        }
+
+        // Draw mid-trail in dark green (one row behind head)
+        int midRow = headRow - 1;
+        if (midRow >= 0 && midRow * MATRIX_TEXT_HEIGHT < MATRIX_SCREEN_H) {
+            int midY = midRow * MATRIX_TEXT_HEIGHT;
+            M5.Lcd.setTextColor(TFT_DARKGREEN, TFT_BLACK);
+            M5.Lcd.drawChar((char)random(32, 128), x, midY, 1);
+        }
+
+        // Leading bright character
+        if (headY >= 0 && headY < MATRIX_SCREEN_H) {
+            M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+            M5.Lcd.drawChar((char)random(32, 128), x, headY, 1);
+        }
+
+        g_matrixDropY[col] += 1;
+        if (g_matrixDropY[col] >= rows + MATRIX_TRAIL_ROWS) {
+            // Once both head and trail are off-screen, restart above
+            g_matrixDropY[col] = -random(rows);
+        }
+    }
+}
+
 void setup() {
     Serial.begin(115200);
     delay(500);
@@ -255,10 +336,12 @@ void setup() {
     M5.begin(true, false, true, false);
     M5.Power.setPowerWLEDSet(false);
 
-    M5.Lcd.setRotation(1);  // wide layout
+    M5.Lcd.setRotation(1);  // wide layout for dashboard
     M5.Lcd.setTextFont(1);
     M5.Lcd.setTextSize(2);
 
+    g_mode            = MODE_DASHBOARD;
+    g_matrixInitialized = false;
     drawStaticFrame();
 
     Serial.println("=== M5Core1 Cyberdeck Status Display ===");
@@ -267,14 +350,32 @@ void setup() {
 
 void loop() {
     M5.update();
-
     processSerialInput();
 
-    uint32_t now = millis();
-    if (now - g_lastRedrawMs > 200) {
-        g_lastRedrawMs = now;
-        g_animPhase++;
-        drawDynamicStats();
+    // Mode switching: BtnA = dashboard, BtnC = matrix
+    if (M5.BtnA.wasPressed()) {
+        g_mode = MODE_DASHBOARD;
+        M5.Lcd.setRotation(1);
+        M5.Lcd.setTextFont(1);
+        M5.Lcd.setTextSize(2);
+        M5.Lcd.fillScreen(TFT_BLACK);
+        drawStaticFrame();
+    }
+    if (M5.BtnC.wasPressed()) {
+        g_mode              = MODE_MATRIX;
+        g_matrixInitialized = false;  // re-init next frame
+    }
+
+    if (g_mode == MODE_DASHBOARD) {
+        uint32_t now = millis();
+        if (now - g_lastRedrawMs > 200) {
+            g_lastRedrawMs = now;
+            g_animPhase++;
+            drawDynamicStats();
+        }
+    } else if (g_mode == MODE_MATRIX) {
+        matrixStep();
+        delay(30);
     }
 
     delay(5);
