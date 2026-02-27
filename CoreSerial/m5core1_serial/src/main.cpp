@@ -73,10 +73,32 @@ static const char *const ART_ARCHLOGO[] = {
     " .`                                 `",
 };
 
+static const char *const ART_CYBERDECK[] = {
+"     █████████  ██   ▄   ▀█████████▄     ▄████████ ",
+"    ███    ███ ███   ██▄   ███    ███   ███    ███ ",
+"    ███    █▀  ███▄▄▄███   ███    ███   ███    ███ ",
+"    ███           ▀▀▀███  ▄███▄▄▄██▀   ▄███▄▄▄▄██▀ ",
+"    ███        ▄██   ███  ▀███▀▀▀██▄   ▀███▀▀▀   ",
+"    ███    █▄  ███   ███   ███    ██▄ ▀███████████ ",
+"    ███    ███ ███   ███   ███    ██    ███    ███ ",
+"    ████████▀   ▀█████▀  ▄█████████     ███    ███ ",
+"                                        ███    ███ ",
+"                                                   ",
+"    ████████▄     ▄████████  ▄████████    ▄█   ▄█         ",
+"    ███   ▀███   ███    ███ ███    ███   ███ ▄███▀        ",
+"    ███    ███   ███    █▀  ███    █▀    ███▐██▀          ",
+"    ███    ███  ▄███▄▄▄     ███         ▄█████▀           ",
+"    ███    ███ ▀▀███▀▀▀     ███         ▀█████▄           ",
+"    ███    ███   ███    █▄  ███    █▄    ███ ██▄          ",
+"    ███   ▄███   ███    ███ ███    ███   ███ ▀███▄        ",
+"    ████████▀    ██████████ ████████▀    ███   ▀█         ",
+"                                         ▀         ",
+};
 
-static const char *const *const g_asciiArts[]      = {ART_ARCHLOGO};
+static const char *const *const g_asciiArts[]      = {ART_ARCHLOGO, ART_CYBERDECK};
 static const int                 g_asciiArtLines[] = {
     (int)(sizeof(ART_ARCHLOGO) / sizeof(ART_ARCHLOGO[0])),
+    (int)(sizeof(ART_CYBERDECK) / sizeof(ART_CYBERDECK[0])),
 };
 static const int g_numAsciiArts = (int)(sizeof(g_asciiArts) / sizeof(g_asciiArts[0]));
 static int       g_currentArtIndex = 0;
