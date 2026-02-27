@@ -43,12 +43,14 @@ static DisplayMode g_mode = MODE_DASHBOARD;
 // Matrix rain mode state (BtnC)
 // ============================================================================
 
-static const int MATRIX_TEXT_HEIGHT = 8;
-static const int MATRIX_COLS        = 40;  // ~320 / 8
-static const int MATRIX_SCREEN_H    = 240;
-static const int MATRIX_TRAIL_ROWS  = 8;   // how many rows long each trail is
+static const int MATRIX_TEXT_HEIGHT     = 8;
+static const int MATRIX_COLS            = 40;  // ~320 / 8
+static const int MATRIX_SCREEN_H        = 240;
+static const int MATRIX_TRAIL_MIN_ROWS  = 4;   // min trail length (in rows)
+static const int MATRIX_TRAIL_MAX_ROWS  = 12;  // max trail length (in rows)
 
 static int  g_matrixDropY[MATRIX_COLS];
+static int  g_matrixTrailLen[MATRIX_COLS];
 static bool g_matrixInitialized = false;
 
 // Utility: split "key=value" into key + value
@@ -278,10 +280,12 @@ static void initMatrixMode() {
     M5.Lcd.setTextSize(1);
     M5.Lcd.fillScreen(TFT_BLACK);
 
-    // Initialize random drop positions above the visible area
+    // Initialize random drop positions and trail lengths
     int rows = MATRIX_SCREEN_H / MATRIX_TEXT_HEIGHT;
     for (int i = 0; i < MATRIX_COLS; ++i) {
         g_matrixDropY[i] = - (random(rows));  // start at random negative row
+        g_matrixTrailLen[i] =
+            random(MATRIX_TRAIL_MIN_ROWS, MATRIX_TRAIL_MAX_ROWS + 1);
     }
     g_matrixInitialized = true;
 }
@@ -299,8 +303,8 @@ static void matrixStep() {
         int headY   = headRow * MATRIX_TEXT_HEIGHT;
         int x       = col * 8;  // 8px spacing across 320px
 
-        // Erase the tail segment that has moved beyond our desired trail length
-        int tailRow = headRow - MATRIX_TRAIL_ROWS;
+        // Erase the tail segment that has moved beyond our desired (per-column) trail length
+        int tailRow = headRow - g_matrixTrailLen[col];
         if (tailRow >= 0 && tailRow * MATRIX_TEXT_HEIGHT < MATRIX_SCREEN_H) {
             int tailY = tailRow * MATRIX_TEXT_HEIGHT;
             // Clear the entire character cell so old trail pixels fully disappear
@@ -322,9 +326,11 @@ static void matrixStep() {
         }
 
         g_matrixDropY[col] += 1;
-        if (g_matrixDropY[col] >= rows + MATRIX_TRAIL_ROWS) {
-            // Once both head and trail are off-screen, restart above
-            g_matrixDropY[col] = -random(rows);
+        if (g_matrixDropY[col] >= rows + g_matrixTrailLen[col]) {
+            // Once both head and trail are off-screen, restart above with a new random trail length
+            g_matrixDropY[col]    = -random(rows);
+            g_matrixTrailLen[col] =
+                random(MATRIX_TRAIL_MIN_ROWS, MATRIX_TRAIL_MAX_ROWS + 1);
         }
     }
 }
