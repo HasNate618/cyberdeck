@@ -1,4 +1,5 @@
 #include <M5Stack.h>
+#include <string.h>
 
 // Simple key=value;key2=value2;... protocol over Serial.
 // Example line from host:
@@ -31,13 +32,54 @@ static String g_lineBuffer;
 static uint32_t g_lastRedrawMs = 0;
 static uint8_t g_animPhase      = 0;
 
+// Cached values for header/IP so we only redraw when they change
+static String g_prevHostname;
+static String g_prevLocalIp;
+static String g_prevPublicIp;
+static bool   g_headerIpInitialized = false;
+
 // Display modes
 enum DisplayMode {
     MODE_DASHBOARD = 0,
     MODE_MATRIX    = 1,
+    MODE_ART       = 2,
 };
 
 static DisplayMode g_mode = MODE_DASHBOARD;
+
+// ============================================================================
+// ASCII art mode state (BtnB)
+// ============================================================================
+
+static const char *const ART_ARCHLOGO[] = {
+    "                   -`",
+    "                  .o+`",
+    "                 `ooo/",
+    "                `+oooo:",
+    "               `+oooooo:",
+    "               -+oooooo+:",
+    "             `/:-:++oooo+:",
+    "            `/++++/+++++++:",
+    "           `/++++++++++++++:",
+    "          `/+++ooooooooooooo/`",
+    "         ./ooosssso++osssssso+`",
+    "        .oossssso-````/ossssss+`",
+    "       -osssssso.      :ssssssso.",
+    "      :osssssss/        osssso+++.",
+    "     /ossssssss/        +ssssooo/-",
+    "   `/ossssso+/:-        -:/+osssso+-",
+    "  `+sso+:-`                 `.-/+oso:",
+    " `++:.                           `-/+/",
+    " .`                                 `",
+};
+
+
+static const char *const *const g_asciiArts[]      = {ART_ARCHLOGO};
+static const int                 g_asciiArtLines[] = {
+    (int)(sizeof(ART_ARCHLOGO) / sizeof(ART_ARCHLOGO[0])),
+};
+static const int g_numAsciiArts = (int)(sizeof(g_asciiArts) / sizeof(g_asciiArts[0]));
+static int       g_currentArtIndex = 0;
 
 // ============================================================================
 // Matrix rain mode state (BtnC)
@@ -52,6 +94,50 @@ static const int MATRIX_TRAIL_MAX_ROWS  = 12;  // max trail length (in rows)
 static int  g_matrixDropY[MATRIX_COLS];
 static int  g_matrixTrailLen[MATRIX_COLS];
 static bool g_matrixInitialized = false;
+
+// Render the currently selected ASCII art centered on screen
+static void renderCurrentArt() {
+    if (g_numAsciiArts <= 0) {
+        return;
+    }
+
+    int idx = g_currentArtIndex % g_numAsciiArts;
+    if (idx < 0) idx = 0;
+
+    const char *const *lines = g_asciiArts[idx];
+    int lineCount            = g_asciiArtLines[idx];
+
+    // Character metrics for font 1, text size 1
+    const int charW = 6;
+    const int charH = 8;
+
+    int maxChars = 0;
+    for (int i = 0; i < lineCount; ++i) {
+        int len = (int)strlen(lines[i]);
+        if (len > maxChars) maxChars = len;
+    }
+
+    int totalH = lineCount * charH;
+    int startY = (MATRIX_SCREEN_H - totalH) / 2;
+    if (startY < 0) startY = 0;
+
+    // Left edge so the widest line is centered; all lines share this x so
+    // relative indentation inside the art is preserved.
+    int xLeft = (320 - maxChars * charW) / 2;
+    if (xLeft < 0) xLeft = 0;
+
+    M5.Lcd.fillScreen(TFT_BLACK);
+    M5.Lcd.setRotation(1);
+    M5.Lcd.setTextFont(1);
+    M5.Lcd.setTextSize(1);
+    M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
+
+    for (int i = 0; i < lineCount; ++i) {
+        int y = startY + i * charH;
+        M5.Lcd.setCursor(xLeft, y);
+        M5.Lcd.print(lines[i]);
+    }
+}
 
 // Utility: split "key=value" into key + value
 static bool splitKeyValue(const String &kv, String &key, String &value) {
@@ -179,21 +265,51 @@ static void drawStaticFrame() {
     M5.Lcd.print("RAM");
 }
 
+static void drawHeaderAndIpIfNeeded() {
+    // Only redraw header/IP when they actually change (or first time)
+    if (!g_headerIpInitialized ||
+        g_prevHostname != g_stats.hostname ||
+        g_prevLocalIp != g_stats.localIp ||
+        g_prevPublicIp != g_stats.publicIp) {
+
+        g_headerIpInitialized = true;
+        g_prevHostname        = g_stats.hostname;
+        g_prevLocalIp         = g_stats.localIp;
+        g_prevPublicIp        = g_stats.publicIp;
+
+        // Header with hostname - clear inside the frame only so we don't erase borders
+        M5.Lcd.fillRect(3, 3, 314, 22, TFT_BLACK);
+        M5.Lcd.setTextSize(2);
+        M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
+        M5.Lcd.setCursor(4, 4);
+        if (g_stats.hostname.length() > 0) {
+            M5.Lcd.printf("[%s]", g_stats.hostname.c_str());
+        } else {
+            M5.Lcd.print("[no-host]");
+        }
+        M5.Lcd.print(" //STATUS");
+
+        // IP row
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.fillRect(72, 74, 244, 32, TFT_BLACK);
+        M5.Lcd.setCursor(72, 74);
+        if (g_stats.localIp.length() > 0) {
+            M5.Lcd.printf("LAN %s", g_stats.localIp.c_str());
+        } else {
+            M5.Lcd.print("LAN n/a");
+        }
+        M5.Lcd.setCursor(72, 90);
+        if (g_stats.publicIp.length() > 0) {
+            M5.Lcd.printf("WAN %s", g_stats.publicIp.c_str());
+        } else {
+            M5.Lcd.print("WAN n/a");
+        }
+    }
+}
+
 static void drawDynamicStats() {
     // Header with hostname
-    // Clear inside the frame only so we don't erase borders
-    M5.Lcd.fillRect(3, 3, 314, 22, TFT_BLACK);
-    M5.Lcd.setTextSize(2);
-    M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
-    M5.Lcd.setCursor(4, 4);
-    if (g_stats.hostname.length() > 0) {
-        M5.Lcd.printf("[%s]", g_stats.hostname.c_str());
-    } else {
-        M5.Lcd.print("[no-host]");
-    }
-    M5.Lcd.print(" //STATUS");
-
-    // Common text settings for all stats
+    // Common text settings for dynamic stats
     M5.Lcd.setTextSize(2);
 
     // TIME row (evenly spaced beneath header)
@@ -204,22 +320,6 @@ static void drawDynamicStats() {
         M5.Lcd.print(g_stats.time);
     } else {
         M5.Lcd.print("waiting...");
-    }
-
-    // IP row
-    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Lcd.fillRect(72, 74, 244, 32, TFT_BLACK);
-    M5.Lcd.setCursor(72, 74);
-    if (g_stats.localIp.length() > 0) {
-        M5.Lcd.printf("LAN %s", g_stats.localIp.c_str());
-    } else {
-        M5.Lcd.print("LAN n/a");
-    }
-    M5.Lcd.setCursor(72, 90);
-    if (g_stats.publicIp.length() > 0) {
-        M5.Lcd.printf("WAN %s", g_stats.publicIp.c_str());
-    } else {
-        M5.Lcd.print("WAN n/a");
     }
 
     // CPU bar + percentage to the right (spaced into lower half)
@@ -346,8 +446,10 @@ void setup() {
     M5.Lcd.setTextFont(1);
     M5.Lcd.setTextSize(2);
 
-    g_mode            = MODE_DASHBOARD;
-    g_matrixInitialized = false;
+    g_mode               = MODE_DASHBOARD;
+    g_matrixInitialized  = false;
+    g_currentArtIndex    = 0;
+    g_headerIpInitialized = false;
     drawStaticFrame();
 
     Serial.println("=== M5Core1 Cyberdeck Status Display ===");
@@ -358,14 +460,26 @@ void loop() {
     M5.update();
     processSerialInput();
 
-    // Mode switching: BtnA = dashboard, BtnC = matrix
+    // Mode switching: BtnA = dashboard, BtnB = ASCII art, BtnC = matrix
     if (M5.BtnA.wasPressed()) {
         g_mode = MODE_DASHBOARD;
         M5.Lcd.setRotation(1);
         M5.Lcd.setTextFont(1);
         M5.Lcd.setTextSize(2);
         M5.Lcd.fillScreen(TFT_BLACK);
+        g_headerIpInitialized = false;
         drawStaticFrame();
+    }
+    if (M5.BtnB.wasPressed()) {
+        if (g_mode != MODE_ART) {
+            g_mode            = MODE_ART;
+            g_currentArtIndex = 0;
+        } else {
+            if (g_numAsciiArts > 0) {
+                g_currentArtIndex = (g_currentArtIndex + 1) % g_numAsciiArts;
+            }
+        }
+        renderCurrentArt();
     }
     if (M5.BtnC.wasPressed()) {
         g_mode              = MODE_MATRIX;
@@ -377,11 +491,14 @@ void loop() {
         if (now - g_lastRedrawMs > 200) {
             g_lastRedrawMs = now;
             g_animPhase++;
+            drawHeaderAndIpIfNeeded();
             drawDynamicStats();
         }
     } else if (g_mode == MODE_MATRIX) {
         matrixStep();
         delay(30);
+    } else if (g_mode == MODE_ART) {
+        // Nothing to do per-frame; ASCII art is static until BtnB is pressed again
     }
 
     delay(5);
