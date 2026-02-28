@@ -7,7 +7,8 @@
 
 // Parsed stats
 struct Stats {
-    String time;
+    String time;   // HH:MM:SS
+    String date;   // YYYY-MM-DD
     String user;
     String hostname;
     float cpu = 0.0f;
@@ -36,6 +37,16 @@ static String g_prevHostname;
 static String g_prevLocalIp;
 static String g_prevPublicIp;
 static bool   g_headerIpInitialized = false;
+
+// Cached values for dynamic stats (TIME, NET, CPU, RAM) - only redraw when changed
+static String g_prevTime;
+static String g_prevDate;
+static float  g_prevNetUp   = -1.0f;
+static float  g_prevNetDown = -1.0f;
+static float  g_prevCpu     = -1.0f;
+static float  g_prevCpuTemp = -1.0f;
+static float  g_prevRamPct  = -1.0f;
+static bool   g_dynamicStatsInitialized = false;
 
 // Display modes
 enum DisplayMode {
@@ -211,6 +222,8 @@ static void parseStatsLine(const String &line) {
             if (splitKeyValue(token, key, value)) {
                 if (key == "time") {
                     next.time = value;
+                } else if (key == "date") {
+                    next.date = value;
                 } else if (key == "user") {
                     next.user = value;
                 } else if (key == "hostname") {
@@ -336,60 +349,95 @@ static void drawHeaderAndIpIfNeeded() {
 }
 
 static void drawDynamicStats() {
-    // Header with hostname
-    // Common text settings for dynamic stats
     M5.Lcd.setTextSize(2);
+    int barX = 72, barY = 166, gap = 6, cpuBarW = 145, barH = 18;
+    int ramY = 208, ramBarW = 190;
 
-    // TIME row
-    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Lcd.fillRect(72, 36, 244, 20, TFT_BLACK);
-    M5.Lcd.setCursor(72, 40);
-    if (g_stats.time.length() > 0) {
-        M5.Lcd.print(g_stats.time);
-    } else {
-        M5.Lcd.print("waiting...");
+    // Time row (updates every second) - only redraw when time changed
+    if (!g_dynamicStatsInitialized || g_prevTime != g_stats.time) {
+        g_prevTime = g_stats.time;
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.fillRect(72, 36, 244, 16, TFT_BLACK);
+        M5.Lcd.setCursor(72, 40);
+        if (g_stats.time.length() > 0) {
+            M5.Lcd.print(g_stats.time);
+        } else {
+            M5.Lcd.print("--:--:--");
+        }
     }
 
-    // NET row (up/down speeds below IP)
-    M5.Lcd.fillRect(72, 124, 244, 16, TFT_BLACK);
-    M5.Lcd.setCursor(72, 124);
-    M5.Lcd.printf("UP:%.2fMB DW:%.2fMB", g_stats.netUpMbps, g_stats.netDownMbps);
-
-    // CPU bar
-    int barX    = 72;
-    int barY    = 166;
-    int gap     = 6;
-    int cpuBarW = 145;
-    int barH    = 18;
-    drawBar(barX, barY, cpuBarW, barH, g_stats.cpu, TFT_PURPLE);
-
-    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Lcd.setCursor(barX + cpuBarW + gap, barY);
-    if (g_stats.cpuTempC > 0.0f) {
-        M5.Lcd.printf("%dC ", (int)(g_stats.cpuTempC + 0.5f));
-    } else {
-        M5.Lcd.print("- ");
+    // Date row (updates only when date changes) - only redraw when date changed
+    if (!g_dynamicStatsInitialized || g_prevDate != g_stats.date) {
+        g_prevDate = g_stats.date;
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.fillRect(72, 52, 244, 16, TFT_BLACK);
+        M5.Lcd.setCursor(72, 56);
+        if (g_stats.date.length() > 0) {
+            M5.Lcd.print(g_stats.date);
+        } else {
+            M5.Lcd.print("----------");
+        }
     }
-    int cpuPct = (int)(g_stats.cpu + 0.5f);
-    if (cpuPct < 10) M5.Lcd.print(" ");
-    M5.Lcd.print(cpuPct);
-    M5.Lcd.print("%");
 
-    // RAM bar
-    int ramY    = 208;
-    int ramBarW = 190;
-    drawBar(barX, ramY, ramBarW, barH, g_stats.ramPercent, TFT_RED);
-
-    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Lcd.setCursor(barX + ramBarW + gap, ramY);
-    if (g_stats.ramTotalMb > 0) {
-        int ramPct = (int)(g_stats.ramPercent + 0.5f);
-        if (ramPct < 10) M5.Lcd.print(" ");
-        M5.Lcd.print(ramPct);
-    } else {
-        M5.Lcd.print("-");
+    // NET row - only when up/down changed
+    if (!g_dynamicStatsInitialized || g_prevNetUp != g_stats.netUpMbps || g_prevNetDown != g_stats.netDownMbps) {
+        g_prevNetUp   = g_stats.netUpMbps;
+        g_prevNetDown = g_stats.netDownMbps;
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.fillRect(72, 124, 244, 16, TFT_BLACK);
+        M5.Lcd.setCursor(72, 124);
+        M5.Lcd.printf("UP:%.2fMB DW:%.2fMB", g_stats.netUpMbps, g_stats.netDownMbps);
     }
-    M5.Lcd.print("%");
+
+    // CPU bar + text - only when cpu or temp changed
+    if (!g_dynamicStatsInitialized || g_prevCpu != g_stats.cpu || g_prevCpuTemp != g_stats.cpuTempC) {
+        g_prevCpu     = g_stats.cpu;
+        g_prevCpuTemp = g_stats.cpuTempC;
+        drawBar(barX, barY, cpuBarW, barH, g_stats.cpu, TFT_PURPLE);
+
+        // Clear CPU text region inside frame to avoid leftover characters
+        int cpuTextX = barX + cpuBarW + gap;
+        int cpuTextW = 320 - 4 - cpuTextX;  // keep within right frame border
+        if (cpuTextW < 0) cpuTextW = 0;
+        M5.Lcd.fillRect(cpuTextX, barY, cpuTextW, barH, TFT_BLACK);
+
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.setCursor(cpuTextX, barY);
+        if (g_stats.cpuTempC > 0.0f) {
+            M5.Lcd.printf("%dC ", (int)(g_stats.cpuTempC + 0.5f));
+        } else {
+            M5.Lcd.print("- ");
+        }
+        int cpuPct = (int)(g_stats.cpu + 0.5f);
+        if (cpuPct < 10) M5.Lcd.print(" ");
+        M5.Lcd.print(cpuPct);
+        M5.Lcd.print("%");
+    }
+
+    // RAM bar + text - only when ram percent changed
+    if (!g_dynamicStatsInitialized || g_prevRamPct != g_stats.ramPercent) {
+        g_prevRamPct = g_stats.ramPercent;
+        drawBar(barX, ramY, ramBarW, barH, g_stats.ramPercent, TFT_RED);
+
+        // Clear RAM text region inside frame to avoid leftover characters
+        int ramTextX = barX + ramBarW + gap;
+        int ramTextW = 320 - 4 - ramTextX;  // keep within right frame border
+        if (ramTextW < 0) ramTextW = 0;
+        M5.Lcd.fillRect(ramTextX, ramY, ramTextW, barH, TFT_BLACK);
+
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.setCursor(ramTextX, ramY);
+        if (g_stats.ramTotalMb > 0) {
+            int ramPct = (int)(g_stats.ramPercent + 0.5f);
+            if (ramPct < 10) M5.Lcd.print(" ");
+            M5.Lcd.print(ramPct);
+        } else {
+            M5.Lcd.print("-");
+        }
+        M5.Lcd.print("%");
+    }
+
+    g_dynamicStatsInitialized = true;
 }
 
 static void processSerialInput() {
@@ -513,7 +561,8 @@ void loop() {
         M5.Lcd.setTextFont(1);
         M5.Lcd.setTextSize(2);
         M5.Lcd.fillScreen(TFT_BLACK);
-        g_headerIpInitialized = false;
+        g_headerIpInitialized     = false;
+        g_dynamicStatsInitialized = false;
         drawStaticFrame();
     }
     if (M5.BtnB.wasPressed()) {

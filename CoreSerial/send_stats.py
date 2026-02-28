@@ -7,7 +7,7 @@ Stream cyberdeck-style system stats over serial to an M5Stack Core1.
 
 Protocol (one line per update, newline-terminated):
 
-    time=2026-02-27 13:45:12;hostname=cyberdeck;cpu=12.3;ram_used_mb=1024;ram_total_mb=3950;ram_percent=25.9;load_1=0.21;load_5=0.17;load_15=0.11
+    time=...;user=...;hostname=...;cpu=12;ram_percent=26;local_ip=...;public_ip=...;cpu_temp_c=57;net_up_mbps=0.12;net_down_mbps=1.34
 
 The Core1 firmware parses key=value pairs separated by ';' and updates
 its on-screen widgets accordingly.
@@ -120,7 +120,9 @@ def _get_net_speeds_mbps(now_epoch: float) -> Tuple[float, float]:
 def collect_stats() -> str:
     """Collect a single snapshot of system stats and return encoded line."""
     now_epoch = time.time()
-    now_str = _dt.datetime.fromtimestamp(now_epoch).strftime("%Y-%m-%d %H:%M:%S")
+    now_dt = _dt.datetime.fromtimestamp(now_epoch)
+    date_str = now_dt.strftime("%Y-%m-%d")
+    time_str = now_dt.strftime("%I:%M:%S %p")  # 12-hour format with AM/PM
     user = getpass.getuser()
     hostname = socket.gethostname()
     cpu_pct = psutil.cpu_percent(interval=None)
@@ -137,7 +139,8 @@ def collect_stats() -> str:
 
     # Send temp and usages as integers (no decimals) for display as "57C, 15%"
     parts = [
-        f"time={now_str}",
+        f"time={time_str}",
+        f"date={date_str}",
         f"user={user}",
         f"hostname={hostname}",
         f"cpu={int(round(cpu_pct))}",
