@@ -15,6 +15,7 @@ its on-screen widgets accordingly.
 
 import argparse
 import datetime as _dt
+import getpass
 import socket
 import time
 import urllib.request
@@ -120,6 +121,7 @@ def collect_stats() -> str:
     """Collect a single snapshot of system stats and return encoded line."""
     now_epoch = time.time()
     now_str = _dt.datetime.fromtimestamp(now_epoch).strftime("%Y-%m-%d %H:%M:%S")
+    user = getpass.getuser()
     hostname = socket.gethostname()
     cpu_pct = psutil.cpu_percent(interval=None)
 
@@ -128,32 +130,23 @@ def collect_stats() -> str:
     ram_total_mb = vm.total // (1024 * 1024)
     ram_percent = vm.percent
 
-    load1, load5, load15 = (0.0, 0.0, 0.0)
-    if hasattr(psutil, "getloadavg"):
-        try:
-            load1, load5, load15 = psutil.getloadavg()
-        except (OSError, AttributeError):
-            pass
-
     local_ip = _get_local_ip()
     public_ip = _maybe_refresh_public_ip(now_epoch)
     cpu_temp_c = _get_cpu_temp_c()
     up_mbps, down_mbps = _get_net_speeds_mbps(now_epoch)
 
-    # Construct the line
+    # Send temp and usages as integers (no decimals) for display as "57C, 15%"
     parts = [
         f"time={now_str}",
+        f"user={user}",
         f"hostname={hostname}",
-        f"cpu={cpu_pct:.1f}",
+        f"cpu={int(round(cpu_pct))}",
         f"ram_used_mb={ram_used_mb}",
         f"ram_total_mb={ram_total_mb}",
-        f"ram_percent={ram_percent:.1f}",
-        f"load_1={load1:.2f}",
-        f"load_5={load5:.2f}",
-        f"load_15={load15:.2f}",
+        f"ram_percent={int(round(ram_percent))}",
         f"local_ip={local_ip}",
         f"public_ip={public_ip}",
-        f"cpu_temp_c={cpu_temp_c:.1f}",
+        f"cpu_temp_c={int(round(cpu_temp_c))}",
         f"net_up_mbps={up_mbps:.2f}",
         f"net_down_mbps={down_mbps:.2f}",
     ]

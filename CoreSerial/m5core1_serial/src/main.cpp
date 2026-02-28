@@ -3,19 +3,17 @@
 
 // Simple key=value;key2=value2;... protocol over Serial.
 // Example line from host:
-// time=2026-02-27 13:45:12;hostname=cyberdeck;cpu=12.3;ram_used_mb=1024;ram_total_mb=3950;ram_percent=25.9;load_1=0.21;load_5=0.17;load_15=0.11
+// time=2026-02-27 13:45:12;hostname=cyberdeck;cpu=12.3;ram_used_mb=1024;ram_total_mb=3950;ram_percent=25.9;
 
 // Parsed stats
 struct Stats {
     String time;
+    String user;
     String hostname;
     float cpu = 0.0f;
     int ramUsedMb = 0;
     int ramTotalMb = 0;
     float ramPercent = 0.0f;
-    float load1 = 0.0f;
-    float load5 = 0.0f;
-    float load15 = 0.0f;
     String localIp;
     String publicIp;
     float cpuTempC = 0.0f;
@@ -33,6 +31,7 @@ static uint32_t g_lastRedrawMs = 0;
 static uint8_t g_animPhase      = 0;
 
 // Cached values for header/IP so we only redraw when they change
+static String g_prevUser;
 static String g_prevHostname;
 static String g_prevLocalIp;
 static String g_prevPublicIp;
@@ -82,7 +81,7 @@ static const char *const ART_ARCHLOGO[] = {
     " .`                                 `",
 };
 
-static const char *const ART_CYBERDECK[] = {
+static const char *const ART_CYBRDECK[] = {
 "     █████████  ██   ▄▄  ▀█████████▄     ▄███████  ",
 "    ███    ███ ███   ██▄   ███    ███   ███    ███ ",
 "    ███    ███ ███   ██▄   ███    ███   ███    ███ ",
@@ -108,10 +107,10 @@ static const char *const ART_CYBERDECK[] = {
 "                                         ▀▀        ",
 };
 
-static const char *const *const g_asciiArts[]      = {ART_ARCHLOGO, ART_CYBERDECK};
+static const char *const *const g_asciiArts[]      = {ART_ARCHLOGO, ART_CYBRDECK};
 static const int                 g_asciiArtLines[] = {
     (int)(sizeof(ART_ARCHLOGO) / sizeof(ART_ARCHLOGO[0])),
-    (int)(sizeof(ART_CYBERDECK) / sizeof(ART_CYBERDECK[0])),
+    (int)(sizeof(ART_CYBRDECK) / sizeof(ART_CYBRDECK[0])),
 };
 static const int g_numAsciiArts = (int)(sizeof(g_asciiArts) / sizeof(g_asciiArts[0]));
 static int       g_currentArtIndex = 0;
@@ -212,6 +211,8 @@ static void parseStatsLine(const String &line) {
             if (splitKeyValue(token, key, value)) {
                 if (key == "time") {
                     next.time = value;
+                } else if (key == "user") {
+                    next.user = value;
                 } else if (key == "hostname") {
                     next.hostname = value;
                 } else if (key == "cpu") {
@@ -222,12 +223,6 @@ static void parseStatsLine(const String &line) {
                     next.ramTotalMb = toInt(value);
                 } else if (key == "ram_percent") {
                     next.ramPercent = toFloat(value);
-                } else if (key == "load_1") {
-                    next.load1 = toFloat(value);
-                } else if (key == "load_5") {
-                    next.load5 = toFloat(value);
-                } else if (key == "load_15") {
-                    next.load15 = toFloat(value);
                 } else if (key == "local_ip") {
                     next.localIp = value;
                 } else if (key == "public_ip") {
@@ -281,59 +276,57 @@ static void drawStaticFrame() {
     // Header divider (hostname will be drawn dynamically above this)
     M5.Lcd.drawFastHLine(0, 28, 320, TFT_DARKGREY);
 
-    // Section labels (all text size 2), spaced evenly down the panel
+    // Section labels (all text size 2), spaced evenly: TIME, IP, NET, CPU, RAM
     M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
-    // TIME near top of content area
-    M5.Lcd.setCursor(4, 40);
+    M5.Lcd.setCursor(4, 38);
     M5.Lcd.print("TIME");
-
-    // IP section below TIME
-    M5.Lcd.setCursor(4, 82);
+    M5.Lcd.setCursor(4, 80);
     M5.Lcd.print("IP");
-
-    // CPU roughly mid-lower
-    M5.Lcd.setCursor(4, 134);
+    M5.Lcd.setCursor(4, 122);
+    M5.Lcd.print("NET");
+    M5.Lcd.setCursor(4, 164);
     M5.Lcd.print("CPU");
-
-    // RAM near bottom
-    M5.Lcd.setCursor(4, 186);
+    M5.Lcd.setCursor(4, 206);
     M5.Lcd.print("RAM");
 }
 
 static void drawHeaderAndIpIfNeeded() {
     // Only redraw header/IP when they actually change (or first time)
     if (!g_headerIpInitialized ||
+        g_prevUser != g_stats.user ||
         g_prevHostname != g_stats.hostname ||
         g_prevLocalIp != g_stats.localIp ||
         g_prevPublicIp != g_stats.publicIp) {
 
         g_headerIpInitialized = true;
-        g_prevHostname        = g_stats.hostname;
-        g_prevLocalIp         = g_stats.localIp;
-        g_prevPublicIp        = g_stats.publicIp;
+        g_prevUser           = g_stats.user;
+        g_prevHostname       = g_stats.hostname;
+        g_prevLocalIp        = g_stats.localIp;
+        g_prevPublicIp       = g_stats.publicIp;
 
-        // Header with hostname - clear inside the frame only so we don't erase borders
+        // Header: user@hostname (no //STATUS)
         M5.Lcd.fillRect(3, 3, 314, 22, TFT_BLACK);
         M5.Lcd.setTextSize(2);
         M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
         M5.Lcd.setCursor(4, 4);
-        if (g_stats.hostname.length() > 0) {
-            M5.Lcd.printf("[%s]", g_stats.hostname.c_str());
+        if (g_stats.user.length() > 0 && g_stats.hostname.length() > 0) {
+            M5.Lcd.printf("%s@%s", g_stats.user.c_str(), g_stats.hostname.c_str());
+        } else if (g_stats.hostname.length() > 0) {
+            M5.Lcd.print(g_stats.hostname.c_str());
         } else {
-            M5.Lcd.print("[no-host]");
+            M5.Lcd.print("?@?");
         }
-        M5.Lcd.print(" //STATUS");
 
-        // IP row
+        // IP row (two lines)
         M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-        M5.Lcd.fillRect(72, 74, 244, 32, TFT_BLACK);
-        M5.Lcd.setCursor(72, 74);
+        M5.Lcd.fillRect(72, 78, 244, 28, TFT_BLACK);
+        M5.Lcd.setCursor(72, 82);
         if (g_stats.localIp.length() > 0) {
             M5.Lcd.printf("LAN %s", g_stats.localIp.c_str());
         } else {
             M5.Lcd.print("LAN n/a");
         }
-        M5.Lcd.setCursor(72, 90);
+        M5.Lcd.setCursor(72, 98);
         if (g_stats.publicIp.length() > 0) {
             M5.Lcd.printf("WAN %s", g_stats.publicIp.c_str());
         } else {
@@ -347,38 +340,56 @@ static void drawDynamicStats() {
     // Common text settings for dynamic stats
     M5.Lcd.setTextSize(2);
 
-    // TIME row (evenly spaced beneath header)
+    // TIME row
     M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Lcd.fillRect(72, 32, 244, 24, TFT_BLACK);
-    M5.Lcd.setCursor(72, 36);
+    M5.Lcd.fillRect(72, 36, 244, 20, TFT_BLACK);
+    M5.Lcd.setCursor(72, 40);
     if (g_stats.time.length() > 0) {
         M5.Lcd.print(g_stats.time);
     } else {
         M5.Lcd.print("waiting...");
     }
 
-    // CPU bar + percentage to the right (spaced into lower half)
-    int barX = 72;
-    int barY = 128;
-    int barW = 170;
-    int barH = 18;
-    drawBar(barX, barY, barW, barH, g_stats.cpu, TFT_PURPLE);
+    // NET row (up/down speeds below IP)
+    M5.Lcd.fillRect(72, 124, 244, 16, TFT_BLACK);
+    M5.Lcd.setCursor(72, 124);
+    M5.Lcd.printf("UP:%.2fMB DW:%.2fMB", g_stats.netUpMbps, g_stats.netDownMbps);
+
+    // CPU bar
+    int barX    = 72;
+    int barY    = 166;
+    int gap     = 6;
+    int cpuBarW = 145;
+    int barH    = 18;
+    drawBar(barX, barY, cpuBarW, barH, g_stats.cpu, TFT_PURPLE);
 
     M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Lcd.setCursor(barX + barW + 8, barY);
-    M5.Lcd.printf("%4.1f%%", g_stats.cpu);
-
-    // RAM bar + percentage to the right, near bottom
-    int ramY = 180;
-    drawBar(barX, ramY, barW, barH, g_stats.ramPercent, TFT_RED);
-
-    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5.Lcd.setCursor(barX + barW + 8, ramY);
-    if (g_stats.ramTotalMb > 0) {
-        M5.Lcd.printf("%4.1f%%", g_stats.ramPercent);
+    M5.Lcd.setCursor(barX + cpuBarW + gap, barY);
+    if (g_stats.cpuTempC > 0.0f) {
+        M5.Lcd.printf("%dC ", (int)(g_stats.cpuTempC + 0.5f));
     } else {
-        M5.Lcd.print("--.-%");
+        M5.Lcd.print("- ");
     }
+    int cpuPct = (int)(g_stats.cpu + 0.5f);
+    if (cpuPct < 10) M5.Lcd.print(" ");
+    M5.Lcd.print(cpuPct);
+    M5.Lcd.print("%");
+
+    // RAM bar
+    int ramY    = 208;
+    int ramBarW = 190;
+    drawBar(barX, ramY, ramBarW, barH, g_stats.ramPercent, TFT_RED);
+
+    M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    M5.Lcd.setCursor(barX + ramBarW + gap, ramY);
+    if (g_stats.ramTotalMb > 0) {
+        int ramPct = (int)(g_stats.ramPercent + 0.5f);
+        if (ramPct < 10) M5.Lcd.print(" ");
+        M5.Lcd.print(ramPct);
+    } else {
+        M5.Lcd.print("-");
+    }
+    M5.Lcd.print("%");
 }
 
 static void processSerialInput() {
