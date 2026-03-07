@@ -122,7 +122,8 @@ def collect_stats() -> str:
     now_epoch = time.time()
     now_dt = _dt.datetime.fromtimestamp(now_epoch)
     date_str = now_dt.strftime("%Y-%m-%d")
-    time_str = now_dt.strftime("%I:%M:%S %p")  # 12-hour format with AM/PM
+    time_str = now_dt.strftime("%I:%M:%S %p")  # 12-hour for main dashboard
+    time24_str = now_dt.strftime("%H:%M:%S")   # 24-hour for time-only view
     user = getpass.getuser()
     hostname = socket.gethostname()
     cpu_pct = psutil.cpu_percent(interval=None)
@@ -147,6 +148,7 @@ def collect_stats() -> str:
     # Send temp and usages as integers (no decimals) for display as "57C, 15%"
     parts = [
         f"time={time_str}",
+        f"time_24={time24_str}",
         f"date={date_str}",
         f"user={user}",
         f"hostname={hostname}",

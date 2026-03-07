@@ -7,7 +7,8 @@
 
 // Parsed stats
 struct Stats {
-    String time;   // HH:MM:SS
+    String time;    // 12h for dashboard
+    String time24;  // 24h for time-only view
     String date;   // YYYY-MM-DD
     String user;
     String hostname;
@@ -62,6 +63,10 @@ enum DisplayMode {
 };
 
 static DisplayMode g_mode = MODE_DASHBOARD;
+
+// Dashboard sub-views: BtnA cycles 0 = full stats, 1 = time only (centered)
+static int  g_dashboardView = 0;
+static bool g_timeOnlyDrawn = false;
 
 // ============================================================================
 // ASCII art mode state (BtnB)
@@ -228,6 +233,8 @@ static void parseStatsLine(const String &line) {
             if (splitKeyValue(token, key, value)) {
                 if (key == "time") {
                     next.time = value;
+                } else if (key == "time_24") {
+                    next.time24 = value;
                 } else if (key == "date") {
                     next.date = value;
                 } else if (key == "user") {
@@ -464,6 +471,38 @@ static void drawDynamicStats() {
     g_dynamicStatsInitialized = true;
 }
 
+// Time-only view: 24h time and date centered, green text
+static void drawTimeOnlyView() {
+    String t24 = g_stats.time24.length() > 0 ? g_stats.time24 : g_stats.time;
+    if (!g_timeOnlyDrawn || g_prevTime != t24 || g_prevDate != g_stats.date) {
+        g_prevTime = t24;
+        g_prevDate = g_stats.date;
+        g_timeOnlyDrawn = true;
+
+        M5.Lcd.fillScreen(TFT_BLACK);
+        M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
+        M5.Lcd.setTextDatum(MC_DATUM);
+
+        // Time: 24h, extra large, center
+        M5.Lcd.setTextSize(6);
+        if (t24.length() > 0) {
+            M5.Lcd.drawString(t24, 160, 95, 1);
+        } else {
+            M5.Lcd.drawString("--:--:--", 160, 95, 1);
+        }
+
+        // Date: smaller, green, below time
+        M5.Lcd.setTextSize(3);
+        if (g_stats.date.length() > 0) {
+            M5.Lcd.drawString(g_stats.date, 160, 150, 1);
+        } else {
+            M5.Lcd.drawString("----------", 160, 150, 1);
+        }
+
+        M5.Lcd.setTextDatum(TL_DATUM);  // restore default
+    }
+}
+
 static void processSerialInput() {
     while (Serial.available() > 0) {
         char c = (char)Serial.read();
@@ -578,16 +617,30 @@ void loop() {
     M5.update();
     processSerialInput();
 
-    // Mode switching: BtnA = dashboard, BtnB = ASCII art, BtnC = matrix
+    // Mode switching: BtnA = cycle dashboard views (full stats / time only), BtnB = ASCII art, BtnC = matrix
     if (M5.BtnA.wasPressed()) {
-        g_mode = MODE_DASHBOARD;
-        M5.Lcd.setRotation(1);
-        M5.Lcd.setTextFont(1);
-        M5.Lcd.setTextSize(2);
-        M5.Lcd.fillScreen(TFT_BLACK);
-        g_headerIpInitialized     = false;
-        g_dynamicStatsInitialized = false;
-        drawStaticFrame();
+        if (g_mode == MODE_DASHBOARD) {
+            // Cycle dashboard view: 0 = full stats, 1 = time only
+            g_dashboardView = (g_dashboardView + 1) % 2;
+            M5.Lcd.fillScreen(TFT_BLACK);
+            if (g_dashboardView == 0) {
+                g_headerIpInitialized     = false;
+                g_dynamicStatsInitialized = false;
+                drawStaticFrame();
+            } else {
+                g_timeOnlyDrawn = false;  // force draw on next loop
+            }
+        } else {
+            g_mode = MODE_DASHBOARD;
+            g_dashboardView = 0;
+            M5.Lcd.setRotation(1);
+            M5.Lcd.setTextFont(1);
+            M5.Lcd.setTextSize(2);
+            M5.Lcd.fillScreen(TFT_BLACK);
+            g_headerIpInitialized     = false;
+            g_dynamicStatsInitialized = false;
+            drawStaticFrame();
+        }
     }
     if (M5.BtnB.wasPressed()) {
         if (g_mode != MODE_ART) {
@@ -606,12 +659,16 @@ void loop() {
     }
 
     if (g_mode == MODE_DASHBOARD) {
-        uint32_t now = millis();
-        if (now - g_lastRedrawMs > 200) {
-            g_lastRedrawMs = now;
-            g_animPhase++;
-            drawHeaderAndIpIfNeeded();
-            drawDynamicStats();
+        if (g_dashboardView == 0) {
+            uint32_t now = millis();
+            if (now - g_lastRedrawMs > 200) {
+                g_lastRedrawMs = now;
+                g_animPhase++;
+                drawHeaderAndIpIfNeeded();
+                drawDynamicStats();
+            }
+        } else {
+            drawTimeOnlyView();
         }
     } else if (g_mode == MODE_MATRIX) {
         matrixStep();
