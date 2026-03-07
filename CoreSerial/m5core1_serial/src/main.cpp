@@ -15,6 +15,9 @@ struct Stats {
     int ramUsedMb = 0;
     int ramTotalMb = 0;
     float ramPercent = 0.0f;
+    float load1 = 0.0f;
+    float load5 = 0.0f;
+    float load15 = 0.0f;
     String localIp;
     String publicIp;
     float cpuTempC = 0.0f;
@@ -43,6 +46,9 @@ static String g_prevTime;
 static String g_prevDate;
 static float  g_prevNetUp   = -1.0f;
 static float  g_prevNetDown = -1.0f;
+static float  g_prevLoad1   = -1.0f;
+static float  g_prevLoad5   = -1.0f;
+static float  g_prevLoad15  = -1.0f;
 static float  g_prevCpu     = -1.0f;
 static float  g_prevCpuTemp = -1.0f;
 static float  g_prevRamPct  = -1.0f;
@@ -236,6 +242,12 @@ static void parseStatsLine(const String &line) {
                     next.ramTotalMb = toInt(value);
                 } else if (key == "ram_percent") {
                     next.ramPercent = toFloat(value);
+                } else if (key == "load_1") {
+                    next.load1 = toFloat(value);
+                } else if (key == "load_5") {
+                    next.load5 = toFloat(value);
+                } else if (key == "load_15") {
+                    next.load15 = toFloat(value);
                 } else if (key == "local_ip") {
                     next.localIp = value;
                 } else if (key == "public_ip") {
@@ -289,18 +301,21 @@ static void drawStaticFrame() {
     // Header divider (hostname will be drawn dynamically above this)
     M5.Lcd.drawFastHLine(0, 28, 320, TFT_DARKGREY);
 
-    // Section labels (all text size 2), spaced evenly: TIME, IP, NET, CPU, RAM
+    // Section labels: sizes by content (TIME/IP 2 lines = bigger slots), LOAD at bottom
+    // TIME 28-73 | IP 73-118 | NET 118-146 | CPU 146-176 | RAM 176-206 | LOAD 206-234
     M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
-    M5.Lcd.setCursor(4, 38);
+    M5.Lcd.setCursor(6, 32);
     M5.Lcd.print("TIME");
-    M5.Lcd.setCursor(4, 80);
+    M5.Lcd.setCursor(6, 82);
     M5.Lcd.print("IP");
-    M5.Lcd.setCursor(4, 122);
+    M5.Lcd.setCursor(6, 122);
     M5.Lcd.print("NET");
-    M5.Lcd.setCursor(4, 164);
+    M5.Lcd.setCursor(6, 150);
     M5.Lcd.print("CPU");
-    M5.Lcd.setCursor(4, 206);
+    M5.Lcd.setCursor(6, 180);
     M5.Lcd.print("RAM");
+    M5.Lcd.setCursor(6, 214);
+    M5.Lcd.print("LOAD");
 }
 
 static void drawHeaderAndIpIfNeeded() {
@@ -321,7 +336,7 @@ static void drawHeaderAndIpIfNeeded() {
         M5.Lcd.fillRect(3, 3, 314, 22, TFT_BLACK);
         M5.Lcd.setTextSize(2);
         M5.Lcd.setTextColor(TFT_GREEN, TFT_BLACK);
-        M5.Lcd.setCursor(4, 4);
+        M5.Lcd.setCursor(6,8);
         if (g_stats.user.length() > 0 && g_stats.hostname.length() > 0) {
             M5.Lcd.printf("%s@%s", g_stats.user.c_str(), g_stats.hostname.c_str());
         } else if (g_stats.hostname.length() > 0) {
@@ -330,7 +345,7 @@ static void drawHeaderAndIpIfNeeded() {
             M5.Lcd.print("?@?");
         }
 
-        // IP row (two lines)
+        // IP slot 2 (two lines)
         M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
         M5.Lcd.fillRect(72, 78, 244, 28, TFT_BLACK);
         M5.Lcd.setCursor(72, 82);
@@ -350,28 +365,26 @@ static void drawHeaderAndIpIfNeeded() {
 
 static void drawDynamicStats() {
     M5.Lcd.setTextSize(2);
-    int barX = 72, barY = 166, gap = 6, cpuBarW = 145, barH = 18;
-    int ramY = 208, ramBarW = 190;
+    int barX = 72, gap = 6, cpuBarW = 145, barH = 18;
+    int barY = 150, ramY = 180, ramBarW = 190;
 
-    // Time row (updates every second) - only redraw when time changed
+    // TIME slot 1 (2 lines): time + date
     if (!g_dynamicStatsInitialized || g_prevTime != g_stats.time) {
         g_prevTime = g_stats.time;
         M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-        M5.Lcd.fillRect(72, 36, 244, 16, TFT_BLACK);
-        M5.Lcd.setCursor(72, 40);
+        M5.Lcd.fillRect(72, 34, 244, 16, TFT_BLACK);
+        M5.Lcd.setCursor(72, 36);
         if (g_stats.time.length() > 0) {
             M5.Lcd.print(g_stats.time);
         } else {
             M5.Lcd.print("--:--:--");
         }
     }
-
-    // Date row (updates only when date changes) - only redraw when date changed
     if (!g_dynamicStatsInitialized || g_prevDate != g_stats.date) {
         g_prevDate = g_stats.date;
         M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-        M5.Lcd.fillRect(72, 52, 244, 16, TFT_BLACK);
-        M5.Lcd.setCursor(72, 56);
+        M5.Lcd.fillRect(72, 50, 244, 16, TFT_BLACK);
+        M5.Lcd.setCursor(72, 52);
         if (g_stats.date.length() > 0) {
             M5.Lcd.print(g_stats.date);
         } else {
@@ -379,17 +392,17 @@ static void drawDynamicStats() {
         }
     }
 
-    // NET row - only when up/down changed
+    // NET slot 3
     if (!g_dynamicStatsInitialized || g_prevNetUp != g_stats.netUpMbps || g_prevNetDown != g_stats.netDownMbps) {
         g_prevNetUp   = g_stats.netUpMbps;
         g_prevNetDown = g_stats.netDownMbps;
         M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
-        M5.Lcd.fillRect(72, 124, 244, 16, TFT_BLACK);
+        M5.Lcd.fillRect(72, 122, 244, 16, TFT_BLACK);
         M5.Lcd.setCursor(72, 124);
         M5.Lcd.printf("UP:%.2fMB DW:%.2fMB", g_stats.netUpMbps, g_stats.netDownMbps);
     }
 
-    // CPU bar + text - only when cpu or temp changed
+    // CPU bar slot 4
     if (!g_dynamicStatsInitialized || g_prevCpu != g_stats.cpu || g_prevCpuTemp != g_stats.cpuTempC) {
         g_prevCpu     = g_stats.cpu;
         g_prevCpuTemp = g_stats.cpuTempC;
@@ -414,7 +427,7 @@ static void drawDynamicStats() {
         M5.Lcd.print("%");
     }
 
-    // RAM bar + text - only when ram percent changed
+    // RAM bar slot 5
     if (!g_dynamicStatsInitialized || g_prevRamPct != g_stats.ramPercent) {
         g_prevRamPct = g_stats.ramPercent;
         drawBar(barX, ramY, ramBarW, barH, g_stats.ramPercent, TFT_RED);
@@ -435,6 +448,17 @@ static void drawDynamicStats() {
             M5.Lcd.print("-");
         }
         M5.Lcd.print("%");
+    }
+
+    // LOAD slot 6 (bottom) - display as "0.0 0.0 0.0"
+    if (!g_dynamicStatsInitialized || g_prevLoad1 != g_stats.load1 || g_prevLoad5 != g_stats.load5 || g_prevLoad15 != g_stats.load15) {
+        g_prevLoad1  = g_stats.load1;
+        g_prevLoad5  = g_stats.load5;
+        g_prevLoad15 = g_stats.load15;
+        M5.Lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+        M5.Lcd.fillRect(72, 210, 244, 16, TFT_BLACK);
+        M5.Lcd.setCursor(72, 212);
+        M5.Lcd.printf("%.1f  %.1f  %.1f", g_stats.load1, g_stats.load5, g_stats.load15);
     }
 
     g_dynamicStatsInitialized = true;

@@ -132,6 +132,13 @@ def collect_stats() -> str:
     ram_total_mb = vm.total // (1024 * 1024)
     ram_percent = vm.percent
 
+    load1, load5, load15 = (0.0, 0.0, 0.0)
+    if hasattr(psutil, "getloadavg"):
+        try:
+            load1, load5, load15 = psutil.getloadavg()
+        except (OSError, AttributeError):
+            pass
+
     local_ip = _get_local_ip()
     public_ip = _maybe_refresh_public_ip(now_epoch)
     cpu_temp_c = _get_cpu_temp_c()
@@ -147,6 +154,9 @@ def collect_stats() -> str:
         f"ram_used_mb={ram_used_mb}",
         f"ram_total_mb={ram_total_mb}",
         f"ram_percent={int(round(ram_percent))}",
+        f"load_1={load1:.2f}",
+        f"load_5={load5:.2f}",
+        f"load_15={load15:.2f}",
         f"local_ip={local_ip}",
         f"public_ip={public_ip}",
         f"cpu_temp_c={int(round(cpu_temp_c))}",
