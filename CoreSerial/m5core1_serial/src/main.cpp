@@ -349,7 +349,7 @@ static void drawHeaderAndIpIfNeeded() {
         } else if (g_stats.hostname.length() > 0) {
             M5.Lcd.print(g_stats.hostname.c_str());
         } else {
-            M5.Lcd.print("?@?");
+            M5.Lcd.print("CONNECTION OFFLINE");
         }
 
         // IP slot 2 (two lines)
