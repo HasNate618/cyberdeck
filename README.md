@@ -44,8 +44,8 @@ This repo contains the software stack: firmware, host scripts, and boot experien
 | Component | Details |
 |---|---|
 | **OS** | [DietPi](https://dietpi.com/) (Raspberry Pi 3B) |
-| **Terminal** | fbterm + tmux (no desktop environment) |
-| **Boot screen** | Custom ASCII splash via `terminaltexteffects` — see [`splash.sh`](splash.sh) |
+| **Terminal** | foot + cage (Wayland) + tmux — autologin straight to terminal on boot |
+| **System info** | fastfetch on session start |
 | **Stats firmware** | PlatformIO firmware for M5GO Core1 — see [`CoreSerial/`](CoreSerial/) |
 | **Stats sender** | Python script streaming system stats over USB serial — see [`CoreSerial/send_stats.py`](CoreSerial/send_stats.py) |
 | **Gaming** | RetroArch (NES, SNES, PS1) |
@@ -73,17 +73,29 @@ The M5GO Core1 is mounted in the case and acts as a live stats dashboard. The Pi
 
 See [`CoreSerial/README.md`](CoreSerial/README.md) for setup and flashing instructions.
 
-### Boot screen
+### Boot experience
 
-`Splash/splash.sh` plays an animated wipe-in of the CYBERDECK logo using [`terminaltexteffects`](https://github.com/ChrisBuilds/terminaltexteffects) in green on tty startup.
+On power-on, tty1 autologs in as `dietpi` and immediately launches a Wayland kiosk session:
+
+```
+cage (Wayland kiosk) -> foot (terminal) -> tmux session "main"
+                                             window 0: fastfetch, then bash
+                                             window 1: CoreSerial stats sender (background)
+```
+
+No login prompt, no desktop, no MOTD — just the terminal.
+
+**Retroarch** (`ra`): press `Ctrl+Alt+F2` to switch off cage, run `ra` on TTY2, `Ctrl+Alt+F1` to return.  
+**MATE desktop**: `Ctrl+Alt+F3` → login → `startx`.
 
 ---
 
 ## Status
 
 - [x] Core1 firmware + serial stats pipeline
-- [x] Custom boot splash screen
-- [x] DietPi base system configured
+- [x] Boot straight to terminal (cage + foot + tmux, autologin)
+- [x] fastfetch system info on session start
+- [x] RetroArch via VT switch (Ctrl+Alt+F2)
 - [ ] 3D-printed case (Blender model near complete, awaiting parts)
 - [ ] Hardware assembly
 - [ ] RetroArch setup and controller config
