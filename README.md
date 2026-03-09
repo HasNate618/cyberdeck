@@ -60,9 +60,11 @@ cyberdeck/
 │   ├── m5core1_serial/       # PlatformIO firmware project
 │   ├── send_stats.py         # Streams system stats over USB serial
 │   └── requirements.txt
-├── splash.sh                 # Animated ASCII boot screen
-├── logo.txt                  # ASCII logo (CYBERDECK)
-└── cyberdeck.txt             # ASCII art (CYBERDECK CORE)
+├── Splash/                   # Boot screen and ASCII art
+│   ├── splash.sh             # Animated ASCII boot screen
+│   ├── logo.txt              # ASCII logo (CYBERDECK)
+│   └── cyberdeck.txt         # ASCII art (CYBERDECK CORE)
+└── Case/                     # 3D-printed case design (Blender WIP)
 ```
 
 ### CoreSerial
@@ -73,7 +75,7 @@ See [`CoreSerial/README.md`](CoreSerial/README.md) for setup and flashing instru
 
 ### Boot screen
 
-`splash.sh` plays an animated wipe-in of the CYBERDECK logo using [`terminaltexteffects`](https://github.com/ChrisBuilds/terminaltexteffects) in green on tty startup.
+`Splash/splash.sh` plays an animated wipe-in of the CYBERDECK logo using [`terminaltexteffects`](https://github.com/ChrisBuilds/terminaltexteffects) in green on tty startup.
 
 ---
 
