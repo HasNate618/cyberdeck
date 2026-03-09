@@ -1,0 +1,12 @@
+# ~/.bash_profile
+# Sourced by bash for login shells.
+# Sources .bashrc for aliases/functions, then autostarts cage on tty1.
+
+if [ -f "$HOME/.bashrc" ]; then
+    . "$HOME/.bashrc"
+fi
+
+# Autostart cage+foot+tmux on tty1 only.
+if [ -z "$WAYLAND_DISPLAY" ] && [ "$(tty)" = "/dev/tty1" ]; then
+    exec "$HOME/.local/bin/start-terminal.sh"
+fi

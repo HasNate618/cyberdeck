@@ -60,6 +60,12 @@ cyberdeck/
 │   ├── m5core1_serial/       # PlatformIO firmware project
 │   ├── send_stats.py         # Streams system stats over USB serial
 │   └── requirements.txt
+├── Setup/                    # Reproducible terminal environment setup
+│   ├── setup.sh              # Run this on a fresh DietPi install
+│   ├── start-terminal.sh     # Cage launch wrapper
+│   ├── bash_profile          # Shell autostart template
+│   ├── fonts/                # TerminessNerdFontMono TTF files
+│   └── README.md             # Setup documentation
 ├── Splash/                   # Boot screen and ASCII art
 │   ├── splash.sh             # Animated ASCII boot screen
 │   ├── logo.txt              # ASCII logo (CYBERDECK)
@@ -72,6 +78,14 @@ cyberdeck/
 The M5GO Core1 is mounted in the case and acts as a live stats dashboard. The Pi sends CPU usage, RAM, load averages, temperature, and network stats over USB serial at 115200 baud. The Core1 firmware renders this in a retro UI on its built-in LCD.
 
 See [`CoreSerial/README.md`](CoreSerial/README.md) for setup and flashing instructions.
+
+### Reproducible setup
+
+To recreate the full terminal environment on a fresh DietPi install, see [`Setup/README.md`](Setup/README.md) and run:
+
+```bash
+bash ~/cyberdeck/Setup/setup.sh
+```
 
 ### Boot experience
 
