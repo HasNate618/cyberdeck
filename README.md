@@ -1,4 +1,4 @@
-# Cyberdeck
+# 
 
 ```
 ▄████████ ▄██   ▄   ▀█████████▄     ▄████████    ▄████████ ████████▄     ▄████████  ▄████████    ▄█   ▄█▄
@@ -43,7 +43,7 @@ This repo contains the software stack: firmware, host scripts, and boot experien
 
 | Component | Details |
 |---|---|
-| **OS** | [DietPi](https://dietpi.com/) (Raspberry Pi 3B) |
+| **OS** | [DietPi](https://dietpi.com/) — An extremely lightweight Debian OS |
 | **Terminal** | foot + cage (Wayland) + tmux — autologin straight to terminal on boot |
 | **System info** | fastfetch on session start |
 | **Stats firmware** | PlatformIO firmware for M5GO Core1 — see [`CoreSerial/`](CoreSerial/) |
@@ -99,25 +99,7 @@ cage (Wayland kiosk) -> foot (terminal) -> tmux session "main"
 
 No login prompt, no desktop, no MOTD — just the terminal.
 
-**Retroarch** (`ra`): press `Ctrl+Alt+F2` to switch off cage, run `ra` on TTY2, `Ctrl+Alt+F1` to return.  
-**MATE desktop**: `Ctrl+Alt+F3` → login → `startx`.
-
 ---
-
-## Status
-
-- [x] Core1 firmware + serial stats pipeline
-- [x] Boot straight to terminal (cage + foot + tmux, autologin)
-- [x] fastfetch system info on session start
-- [x] RetroArch via VT switch (Ctrl+Alt+F2)
-- [ ] 3D-printed case (Blender model near complete, awaiting parts)
-- [ ] Hardware assembly
-- [ ] RetroArch setup and controller config
-- [ ] Audio routing (speaker + Bluetooth)
-- [ ] Full GPIO breadboard wiring
-
----
-
 ## Use cases
 
 - Portable Linux terminal
