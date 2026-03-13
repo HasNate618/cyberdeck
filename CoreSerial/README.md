@@ -69,8 +69,30 @@ Both sides default to **115200 baud**.
 - RAM usage + bar
 - Load averages
 
+### I2C pipeline (optional)
+
+On the `feature/i2c-pipeline` branch you can send the same stats over I2C instead of USB serial: Pi as I2C master, Core1 as slave. No USB cable needed between Pi and Core (e.g. for a separate display unit).
+
+- **Core pins:** SDA = GPIO 21, SCL = GPIO 22 (3.3 V); share GND with the Pi.
+- **Core I2C address:** `0x42`.
+- **Pi:** Enable I2C (e.g. `raspi-config` → Interface Options → I2C). Default bus is 1 (GPIO 2 = SDA, GPIO 3 = SCL).
+
+1. Install I2C dependencies (includes `smbus2`):
+
+   ```bash
+   pip install -r requirements-i2c.txt
+   ```
+
+2. Run the I2C sender:
+
+   ```bash
+   python send_stats_i2c.py --bus 1
+   ```
+
+The firmware on this branch listens on both serial and I2C; use either `send_stats.py` (serial) or `send_stats_i2c.py` (I2C).
+
 ### Notes
 
 - The USB VID/PID you mentioned (`1a86:55d4 QinHeng Electronics USB Single Serial`) is typical of CH340 serial adapters. On Linux this is normally exposed as `/dev/ttyUSB0`, but adjust the `--port` argument as needed.
-- The firmware is intentionally self‑contained and does not use WiFi; it just listens on the USB serial connected to your cyberdeck.
+- The firmware is intentionally self‑contained and does not use WiFi; it just listens on the USB serial (and optionally I2C) connected to your cyberdeck.
 
