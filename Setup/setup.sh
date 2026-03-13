@@ -46,7 +46,7 @@ if [ ! -d "$DOTFILES_DIR" ]; then
     exit 1
 fi
 cd "$DOTFILES_DIR"
-for pkg in nvim tmux foot superfile; do
+for pkg in nvim tmux foot superfile btop; do
     stow -t "$HOME" "$pkg" 2>/dev/null && ok "Stowed $pkg" || info "$pkg already stowed or conflict (check manually)"
 done
 cd - > /dev/null
