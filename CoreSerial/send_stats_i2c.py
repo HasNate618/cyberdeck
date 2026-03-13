@@ -1,22 +1,20 @@
 #!/usr/bin/env python3
 
 """
-send_stats_i2c.py
+DEPRECATED: I2C sender (do not use)
 
-Send cyberdeck stats to M5Stack Core1 over I2C (Pi as master, Core as slave).
+This script was an experiment to drive the Core over I2C as a slave.
+On the M5Stack Core1 hardware the I2C bus and pins are heavily shared
+with onboard devices / PSRAM, and a clean Pi->Core I2C link turned out
+to be unreliable. The project has pivoted to a UART-based link instead.
 
-Same protocol as send_stats.py (key=value;... newline-terminated). Core listens
-as I2C slave at 0x42 on SDA=21, SCL=22. Enable I2C on the Pi (raspi-config) and
-wire Pi SDA/SCL to Core SDA (G21) / SCL (G22); share GND.
-
-  pip install smbus2
-  python send_stats_i2c.py --bus 1
+Keep this file around only as historical reference; use send_stats_uart.py.
 """
 
 import argparse
 import time
 
-from smbus2 import SMBus, i2c_msg  # type: ignore
+from smbus2 import SMBus, i2c_msg  # type: ignore  # pragma: no cover
 
 # Reuse stats collection from serial script
 from send_stats import collect_stats  # noqa: I001

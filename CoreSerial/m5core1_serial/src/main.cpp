@@ -1,9 +1,8 @@
 #include <M5Stack.h>
-#include <Wire.h>
 #include <string.h>
 
-// Stats protocol: key=value;key2=value2;... over Serial or I2C (newline-terminated).
-// I2C: Core is slave on SDA=21, SCL=22; Pi sends same line in block writes.
+// Stats protocol: key=value;key2=value2;... over Serial (USB) or UART2 (Pi link),
+// newline-terminated.
 // Example line from host:
 // time=2026-02-27 13:45:12;hostname=cyberdeck;cpu=12.3;ram_used_mb=1024;ram_total_mb=3950;ram_percent=25.9;
 
@@ -30,19 +29,12 @@ struct Stats {
 
 static Stats g_stats;
 
-// Line buffer (shared by Serial and I2C)
+// Line buffer (shared by Serial and UART2)
 static String g_lineBuffer;
 
-// I2C slave: SDA 21, SCL 22 (ESP32 default for Wire)
-static const int I2C_SDA_PIN = 21;
-static const int I2C_SCL_PIN = 22;
-static const uint8_t I2C_SLAVE_ADDR = 0x42;
-
-// I2C receive ring buffer (filled in ISR, drained in loop)
-#define I2C_RING_SIZE 512
-static uint8_t     g_i2cRing[I2C_RING_SIZE];
-static volatile uint16_t g_i2cRingHead = 0;
-static volatile uint16_t g_i2cRingTail = 0;
+// Dedicated stats UART on Core Grove GPIOs: TX=G26, RX=G36
+// (Pi TX -> Core RX=G36, Pi RX -> Core TX=G26, shared GND)
+static HardwareSerial StatsSerial(2);
 
 // Dashboard redraw timing
 static uint32_t g_lastRedrawMs = 0;
@@ -516,28 +508,6 @@ static void drawTimeOnlyView() {
     }
 }
 
-// Push one byte from I2C ISR into ring (call from onReceive only)
-static void IRAM_ATTR i2cRingPush(uint8_t b) {
-    uint16_t next = (g_i2cRingHead + 1) % I2C_RING_SIZE;
-    if (next != g_i2cRingTail) {
-        g_i2cRing[g_i2cRingHead] = b;
-        g_i2cRingHead = next;
-    }
-}
-
-// I2C slave receive callback (ISR context: no String, minimal work)
-static void IRAM_ATTR onI2CReceive(int len) {
-    int n = Wire.available();
-    // First byte is often register from block write; skip so we get raw payload
-    if (n > 0) {
-        (void)Wire.read();
-        n--;
-    }
-    while (n-- > 0 && Wire.available()) {
-        i2cRingPush((uint8_t)Wire.read());
-    }
-}
-
 static void processSerialInput() {
     while (Serial.available() > 0) {
         char c = (char)Serial.read();
@@ -554,11 +524,10 @@ static void processSerialInput() {
     }
 }
 
-// Drain I2C ring into line buffer and parse on newline (same protocol as Serial)
-static void processI2CInput() {
-    while (g_i2cRingTail != g_i2cRingHead) {
-        char c = (char)g_i2cRing[g_i2cRingTail];
-        g_i2cRingTail = (g_i2cRingTail + 1) % I2C_RING_SIZE;
+// Read stats from UART2 (Pi link) using same protocol as Serial
+static void processStatsUartInput() {
+    while (StatsSerial.available() > 0) {
+        char c = (char)StatsSerial.read();
         if (c == '\r') continue;
         if (c == '\n') {
             String line = g_lineBuffer;
@@ -643,10 +612,10 @@ void setup() {
 
     M5.begin(true, false, true, false);
     M5.Power.setPowerWLEDSet(false);
-
-    // I2C slave on SDA=21, SCL=22 for Pi stats pipeline (ESP32: address, sda, scl)
-    Wire.begin(I2C_SLAVE_ADDR, I2C_SDA_PIN, I2C_SCL_PIN);
-    Wire.onReceive(onI2CReceive);
+    
+    // Stats UART on Grove GPIOs: RX=G36, TX=G26 (UART2)
+    // Pi wiring: TX(GPIO14) -> G36, RX(GPIO15) -> G26, GND->G
+    StatsSerial.begin(115200, SERIAL_8N1, 36, 26);
 
     M5.Lcd.setRotation(1);  // wide layout for dashboard
     M5.Lcd.setTextFont(1);
@@ -659,13 +628,13 @@ void setup() {
     drawStaticFrame();
 
     Serial.println("=== M5Core1 Cyberdeck Status Display ===");
-    Serial.println("Stats via Serial or I2C (0x42, SDA=21 SCL=22)...");
+    Serial.println("Stats via USB Serial and UART2 (G26 TX, G36 RX)...");
 }
 
 void loop() {
     M5.update();
     processSerialInput();
-    processI2CInput();
+    processStatsUartInput();
 
     // Mode switching: BtnA = cycle dashboard views (full stats / time only), BtnB = ASCII art, BtnC = matrix
     if (M5.BtnA.wasPressed()) {

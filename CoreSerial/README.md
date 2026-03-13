@@ -69,27 +69,35 @@ Both sides default to **115200 baud**.
 - RAM usage + bar
 - Load averages
 
-### I2C pipeline (optional)
+### UART GPIO pipeline (optional)
 
-On the `feature/i2c-pipeline` branch you can send the same stats over I2C instead of USB serial: Pi as I2C master, Core1 as slave. No USB cable needed between Pi and Core (e.g. for a separate display unit).
+On the `feature/i2c-pipeline` branch (now pivoted to UART) you can send the same stats over a direct UART link instead of USB serial: Pi GPIO UART ↔ Core Grove GPIOs. This lets you hide the Core inside the deck and run a simple 3‑wire cable.
 
-- **Core pins:** SDA = GPIO 21, SCL = GPIO 22 (3.3 V); share GND with the Pi.
-- **Core I2C address:** `0x42`.
-- **Pi:** Enable I2C (e.g. `raspi-config` → Interface Options → I2C). Default bus is 1 (GPIO 2 = SDA, GPIO 3 = SCL).
+- **Core pins (stats UART on Grove):**
+  - Core G26 = TX (from Core to Pi RX)
+  - Core G36 = RX (from Pi TX to Core)
+  - Core G   = GND
+- **Pi pins (UART0):**
+  - GPIO14 = TXD0 (pin 8)
+  - GPIO15 = RXD0 (pin 10)
+  - Any GND (e.g. pin 6)
 
-1. Install I2C dependencies (includes `smbus2`):
+Wiring (3.3 V logic only):
+
+- Pi TX (GPIO14) → Core G36
+- Pi RX (GPIO15) → Core G26
+- Pi GND → Core G
+
+On the Pi:
+
+1. Enable the serial port (disable login shell on serial, keep hardware port enabled).
+2. Run the UART sender:
 
    ```bash
-   pip install -r requirements-i2c.txt
+   python send_stats_uart.py --port /dev/serial0
    ```
 
-2. Run the I2C sender:
-
-   ```bash
-   python send_stats_i2c.py --bus 1
-   ```
-
-The firmware on this branch listens on both serial and I2C; use either `send_stats.py` (serial) or `send_stats_i2c.py` (I2C).
+The firmware on this branch listens on both USB serial and the UART GPIO link; use either `send_stats.py` (USB) or `send_stats_uart.py` (GPIO UART).
 
 ### Notes
 
