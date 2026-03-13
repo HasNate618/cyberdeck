@@ -16,25 +16,27 @@ wire Pi SDA/SCL to Core SDA (G21) / SCL (G22); share GND.
 import argparse
 import time
 
-from smbus2 import SMBus  # type: ignore
+from smbus2 import SMBus, i2c_msg  # type: ignore
 
 # Reuse stats collection from serial script
 from send_stats import collect_stats  # noqa: I001
 
 # Core I2C slave address (must match firmware)
 CORE_I2C_ADDR = 0x42
-# Block write payload size (first byte is register; Core skips it)
-CHUNK_SIZE = 31
+# Raw I2C payload size per write. Keep under 32 bytes for compatibility.
+# We prepend a single 0x00 byte per transaction (firmware ignores first byte).
+CHUNK_SIZE = 30
 
 
 def send_line_i2c(bus: SMBus, line: str) -> None:
-    """Send one newline-terminated line to Core in 31-byte block writes."""
+    """Send one newline-terminated line to Core using plain I2C writes."""
     payload = (line + "\n").encode("utf-8", errors="ignore")
     offset = 0
     while offset < len(payload):
         chunk = payload[offset : offset + CHUNK_SIZE]
-        # write_i2c_block_data: addr, register (1 byte), list of bytes
-        bus.write_i2c_block_data(CORE_I2C_ADDR, 0x00, list(chunk))
+        # Use raw I2C write (not SMBus "block write") for better ESP32 slave compatibility.
+        msg = i2c_msg.write(CORE_I2C_ADDR, b"\x00" + bytes(chunk))
+        bus.i2c_rdwr(msg)
         offset += len(chunk)
 
 
